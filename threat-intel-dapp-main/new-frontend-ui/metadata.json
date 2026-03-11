@@ -1,0 +1,8 @@
+{
+  "name": "SentinelNet - Decentralized Threat Intelligence",
+  "description": "A cutting-edge platform for sharing, scanning, and incentivizing global threat intelligence using AI and decentralized principles.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

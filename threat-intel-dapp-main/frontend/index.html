@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              neon: '#DFFF00',
+            },
+          },
+        },
+      };
+    </script>
+    <title>SENTINEL_SYS | Decentralized Defense Mesh</title>
+  </head>
+  <body class="bg-grid overflow-x-hidden">
+    <div class="scanline"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

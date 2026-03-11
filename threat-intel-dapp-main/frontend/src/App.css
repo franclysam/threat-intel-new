@@ -1,0 +1,5 @@
+/* Reset styles for the new UI */
+.app-shell {
+  min-height: 100vh;
+  background: black;
+}

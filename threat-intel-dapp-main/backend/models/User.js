@@ -1,0 +1,24 @@
+const mongoose = require("mongoose");
+
+const userSchema = new mongoose.Schema({
+  wallet: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  tokens: {
+    type: Number,
+    default: 0
+  },
+  role: {
+    type: String,
+    enum: ['user', 'validator', 'admin'],
+    default: 'user'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+module.exports = mongoose.model("User", userSchema);

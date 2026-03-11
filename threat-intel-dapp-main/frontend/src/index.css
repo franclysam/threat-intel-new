@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+:root {
+  --neon: #DFFF00;
+  --dark-bg: #000000;
+  --grid-color: rgba(223, 255, 0, 0.03);
+  background-color: var(--dark-bg);
+  color: white;
+}
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--dark-bg);
+  color: white;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon);
+}
+
+.scanline {
+  width: 100%;
+  height: 100px;
+  z-index: 99;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(223, 255, 0, 0.05) 50%, rgba(0, 0, 0, 0) 100%);
+  opacity: 0.1;
+  position: fixed;
+  bottom: 100%;
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes scanline {
+  0% {
+    bottom: 100%;
+  }
+
+  100% {
+    bottom: -100px;
+  }
+}
+
+/* Custom UI Elements from New Theme */
+
+.corner-tl,
+.corner-tr,
+.corner-bl,
+.corner-br {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--neon);
+  z-index: 10;
+}
+
+.corner-tl {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.corner-tr {
+  top: 0;
+  right: 0;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.corner-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.corner-br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.glitch {
+  position: relative;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch::before {
+  left: 2px;
+  text-shadow: -2px 0 #ff00c1;
+  clip: rect(44px, 450px, 56px, 0);
+  animation: glitch-anim 5s infinite linear alternate-reverse;
+}
+
+.glitch::after {
+  left: -2px;
+  text-shadow: -2px 0 #00fff9, 2px 2px #ff00c1;
+  animation: glitch-anim2 1s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim {
+  0% {
+    clip: rect(31px, 9999px, 94px, 0);
+  }
+
+  20% {
+    clip: rect(62px, 9999px, 42px, 0);
+  }
+
+  40% {
+    clip: rect(16px, 9999px, 78px, 0);
+  }
+
+  60% {
+    clip: rect(58px, 9999px, 11px, 0);
+  }
+
+  80% {
+    clip: rect(84px, 9999px, 34px, 0);
+  }
+
+  100% {
+    clip: rect(11px, 9999px, 63px, 0);
+  }
+}
+
+@keyframes glitch-anim2 {
+  0% {
+    clip: rect(65px, 9999px, 100px, 0);
+  }
+
+  20% {
+    clip: rect(12px, 9999px, 53px, 0);
+  }
+
+  40% {
+    clip: rect(98px, 9999px, 12px, 0);
+  }
+
+  60% {
+    clip: rect(42px, 9999px, 84px, 0);
+  }
+
+  80% {
+    clip: rect(73px, 9999px, 16px, 0);
+  }
+
+  100% {
+    clip: rect(24px, 9999px, 92px, 0);
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #000;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #222;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #DFFF00;
+}

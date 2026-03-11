@@ -1,0 +1,33 @@
+[0m[0m
+[0m[4mC:\Users\leksh\Documents\threat-intel-dapp\frontend\src\components\Hero.jsx[24m[0m
+[0m  [2m71:45[22m  [31merror[39m  Error: Cannot call impure function during render[0m
+[0m[0m
+[0m`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).[0m
+[0m[0m
+[0m  69 |             style={{[0m
+[0m  70 |               left: `${i * 5}%`,[0m
+[0m> 71 |               animation: `data-stream ${3 + Math.random() * 5}s linear infinite`,[0m
+[0m     |                                             ^^^^^^^^^^^^^ Cannot call impure function[0m
+[0m  72 |               animationDelay: `${Math.random() * 5}s`,[0m
+[0m  73 |               transform: `translateY(${scrollY * 0.2}px)`[0m
+[0m  74 |             }}  [2mreact-hooks/purity[22m[0m
+[0m  [2m72:34[22m  [31merror[39m  Error: Cannot call impure function during render[0m
+[0m[0m
+[0m`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).[0m
+[0m[0m
+[0m  70 |               left: `${i * 5}%`,[0m
+[0m  71 |               animation: `data-stream ${3 + Math.random() * 5}s linear infinite`,[0m
+[0m> 72 |               animationDelay: `${Math.random() * 5}s`,[0m
+[0m     |                                  ^^^^^^^^^^^^^ Cannot call impure function[0m
+[0m  73 |               transform: `translateY(${scrollY * 0.2}px)`[0m
+[0m  74 |             }}[0m
+[0m  75 |           >                      [2mreact-hooks/purity[22m[0m
+[0m[0m
+[0m[4mC:\Users\leksh\Documents\threat-intel-dapp\frontend\src\components\dashboard\Profiletab.jsx[24m[0m
+[0m  [2m12:10[22m  [31merror[39m  'loading' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mC:\Users\leksh\Documents\threat-intel-dapp\frontend\src\components\dashboard\Rewardstab.jsx[24m[0m
+[0m  [2m31:16[22m  [31merror[39m  'error' is defined but never used  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[31m[1m✖ 4 problems (4 errors, 0 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m
