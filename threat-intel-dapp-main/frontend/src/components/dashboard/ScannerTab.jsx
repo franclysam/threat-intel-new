@@ -41,13 +41,23 @@ const ScannerTab = () => {
           hash: data.hash
         });
       } else {
-        // Mock link scan for now as backend doesn't support it yet
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+        const response = await fetch(`${API_URL}/scan/link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: input }),
+        });
+
+        if (!response.ok) throw new Error('Link Scan failed');
+        const data = await response.json();
+
         setResult({
-          verdict: 'CLEAN_SIGNAL',
-          riskScore: 0,
-          summary: 'The provided URL target has been validated against known blacklists and reputation databases. No active threats detected.',
-          threatsDetected: ['None']
+          verdict: data.riskScore >= 80 ? 'MALICIOUS_DETECTED' : data.riskScore >= 40 ? 'SUSPICIOUS_BEHAVIOR' : 'CLEAN_SIGNAL',
+          riskScore: data.riskScore,
+          summary: data.explanation || 'The provided URL target has been validated. No active threats detected.',
+          threatsDetected: data.threatsDetected && data.threatsDetected.length > 0 ? data.threatsDetected : ['None'],
+          fileName: data.fileName,
+          hash: data.hash
         });
       }
     } catch (e) {
