@@ -16,6 +16,7 @@ lerna-debug.log*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+../.vscode/
 .idea
 .DS_Store
 *.suo
@@ -23,3 +24,4 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+project_modules.zip

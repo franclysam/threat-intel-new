@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { transferTokens, claimRewards, getPendingRewards } from '../../services/Rewardservice';
+import { transferTokens, claimRewards, getPendingRewards, getUserTransactions } from '../../services/Rewardservice';
+import { getBalance, getAddress } from '../../utils/Web3';
 
 const DATA = [
   { name: 'MON', rewards: 20 },
@@ -18,24 +19,54 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferring, setTransferring] = useState(false);
   const [pendingRewards, setPendingRewards] = useState('0');
+  const [transactions, setTransactions] = useState([]);
+  const [nativeBalance, setNativeBalance] = useState('0');
+  const [isWalletSynced, setIsWalletSynced] = useState(true);
 
   useEffect(() => {
     if (!userAddress) return;
 
     let active = true;
-    const loadPendingRewards = async () => {
+    const verifyWalletAndLoadData = async () => {
       try {
+        // CROSSCHECK: Ensure active wallet matches the passed userAddress prop
+        // We use try-catch inside in case getAddress throws if Web3 isn't cleanly initialized
+        let currentActiveAddress = userAddress;
+        try {
+          currentActiveAddress = await getAddress();
+        } catch (e) {
+          console.warn("Could not fetch active address from Web3, proceeding with userAddress fallback for simulation", e);
+        }
+
+        if (currentActiveAddress.toLowerCase() !== userAddress.toLowerCase()) {
+          if (active) setIsWalletSynced(false);
+          return;
+        }
+
+        // Fetch Native Metamask Balance
+        const nativeBal = await getBalance(userAddress);
+
+        // Fetch Mock DB Rewards
         const pending = await getPendingRewards(userAddress);
+        const txs = await getUserTransactions(userAddress);
+
         if (!active) return;
+        
+        setIsWalletSynced(true);
+        setNativeBalance(parseFloat(nativeBal || '0').toFixed(4));
         setPendingRewards(parseFloat(pending || '0').toFixed(2));
+        setTransactions(txs || []);
       } catch (error) {
         if (!active) return;
+        setIsWalletSynced(false);
+        setNativeBalance('0.0000');
         setPendingRewards('0.00');
+        setTransactions([]);
       }
     };
 
-    loadPendingRewards();
-    const interval = setInterval(loadPendingRewards, 60000);
+    verifyWalletAndLoadData();
+    const interval = setInterval(verifyWalletAndLoadData, 10000); // UI poll
     return () => {
       active = false;
       clearInterval(interval);
@@ -45,12 +76,14 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
   const handleClaim = async () => {
     setClaiming(true);
     try {
-      await claimRewards();
+      await claimRewards(userAddress);
       alert('Rewards claimed successfully!');
       const pending = await getPendingRewards(userAddress);
       setPendingRewards(parseFloat(pending || '0').toFixed(2));
+      const txs = await getUserTransactions(userAddress);
+      setTransactions(txs || []);
     } catch (error) {
-      alert('Failed to claim rewards: ' + (error?.message || 'Contract error'));
+      alert('Failed to claim rewards: ' + (error?.message || error?.error || 'Contract error'));
     } finally {
       setClaiming(false);
     }
@@ -64,23 +97,38 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
 
     setTransferring(true);
     try {
-      await transferTokens(transferAddress, transferAmount);
+      await transferTokens(userAddress, transferAddress, transferAmount);
       alert('Transfer successful!');
       setTransferAddress('');
       setTransferAmount('');
+      const txs = await getUserTransactions(userAddress);
+      setTransactions(txs || []);
     } catch (error) {
-      alert('Transfer failed: ' + (error?.message || 'Transaction rejected'));
+      alert('Transfer failed: ' + (error?.message || error?.error || 'Transaction rejected'));
     } finally {
       setTransferring(false);
     }
   };
 
-  const transactions = [
-    { id: 'TX_881', date: 'OCT 25, 2025', amount: 50, type: 'SUBMISSION', status: 'Completed' },
-    { id: 'TX_442', date: 'OCT 24, 2025', amount: 15, type: 'VALIDATION', status: 'Completed' },
-    { id: 'TX_109', date: 'OCT 22, 2025', amount: -100, type: 'WITHDRAWAL', status: 'Completed' },
-    { id: 'TX_002', date: 'OCT 20, 2025', amount: 50, type: 'SUBMISSION', status: 'Completed' },
-  ];
+  const formatDate = (dateString) => {
+    const d = new Date(dateString);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+  };
+
+  if (!isWalletSynced) {
+    return (
+      <div className="bg-orange-500/10 border border-orange-500/50 p-8 flex flex-col items-center justify-center text-center animate-pulse">
+        <svg className="w-12 h-12 text-orange-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        <h3 className="text-white font-black text-xl tracking-widest uppercase mb-2">Wallet Desynchronization Detected</h3>
+        <p className="text-orange-500/80 text-xs font-bold font-mono max-w-lg mb-4">
+          SECURITY PROTOCOL TRIGGERED: The active address in your MetaMask extension does not match your currently authenticated session address.
+        </p>
+        <p className="text-orange-500/80 text-[10px] font-black tracking-widest uppercase border border-orange-500 px-4 py-2">
+          Switch MetaMask Back To: {userAddress}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 md:space-y-12">
@@ -98,9 +146,10 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
         {[
-          { label: 'Available_Liquidity', value: tokenBalance, unit: '$RWT', footer: '+12%_DELTA_7D', footerColor: 'text-neon' },
+          { label: 'Native_Balance', value: nativeBalance, unit: 'ETH/POL', footer: 'ON-CHAIN LIQUIDITY', footerColor: 'text-purple-500' },
+          { label: 'Mock_Liquidity', value: tokenBalance, unit: '$RWT', footer: '+12%_DELTA_7D', footerColor: 'text-neon' },
           { label: 'Pending_Settlement', value: pendingRewards, unit: '$RWT', footer: 'ACCUMULATING...', footerColor: 'text-yellow-500' },
           { label: 'Total_Earned', value: (parseFloat(tokenBalance) + parseFloat(pendingRewards)).toFixed(2), unit: '$RWT', footer: 'YIELD_8.5%_APY', footerColor: 'text-neon' },
         ].map((card, i) => (
@@ -186,22 +235,36 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
                 <th className="px-6 md:px-8 py-5">TX_HASH</th>
                 <th className="px-6 md:px-8 py-5">TIMESTAMP</th>
                 <th className="px-6 md:px-8 py-5">TYPE</th>
+                <th className="px-6 md:px-8 py-5">TO / FROM</th>
                 <th className="px-6 md:px-8 py-5">QUANTITY</th>
                 <th className="px-6 md:px-8 py-5">STATUS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-900">
-              {transactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-neon/5 transition-all group">
-                  <td className="px-6 md:px-8 py-4 md:py-5 font-mono text-[9px] md:text-[10px] text-gray-400 group-hover:text-neon transition-colors">{tx.id}</td>
-                  <td className="px-6 md:px-8 py-4 md:py-5 text-[9px] md:text-[10px] text-gray-500 font-bold">{tx.date}</td>
+              {transactions.length === 0 ? (
+                 <tr>
+                 <td colSpan="6" className="px-6 md:px-8 py-8 text-center text-gray-600 font-bold text-[10px] tracking-widest uppercase">
+                   No transactions found in the vault ledger
+                 </td>
+               </tr>
+              ) : transactions.map((tx) => (
+                <tr key={tx._id} className="hover:bg-neon/5 transition-all group">
+                  <td className="px-6 md:px-8 py-4 md:py-5 font-mono text-[9px] md:text-[10px] text-gray-400 group-hover:text-neon transition-colors" title={tx.hash}>
+                    {tx.hash.substring(0, 16)}...
+                  </td>
+                  <td className="px-6 md:px-8 py-4 md:py-5 text-[9px] md:text-[10px] text-gray-500 font-bold">
+                    {formatDate(tx.createdAt)}
+                  </td>
                   <td className="px-6 md:px-8 py-4 md:py-5 text-[9px] md:text-[10px]">
-                    <span className={`font-black tracking-widest uppercase ${tx.amount > 0 ? 'text-neon/70' : 'text-orange-500/70'}`}>
+                    <span className={`font-black tracking-widest uppercase ${(tx.type === 'EARNED' || tx.type === 'RECEIVED' || tx.type === 'CLAIMED') ? 'text-neon/70' : 'text-orange-500/70'}`}>
                       {tx.type}
                     </span>
                   </td>
+                  <td className="px-6 md:px-8 py-4 md:py-5 font-mono text-[9px] md:text-[10px] text-gray-400">
+                    {tx.toWallet ? `${tx.toWallet.substring(0, 8)}...` : '-'}
+                  </td>
                   <td className="px-6 md:px-8 py-4 md:py-5 text-[9px] md:text-[10px] font-black text-white whitespace-nowrap">
-                    {tx.amount > 0 ? '+' : ''}{tx.amount} $RWT
+                    {(tx.type === 'EARNED' || tx.type === 'RECEIVED') ? '+' : (tx.type === 'TRANSFERRED' ? '-' : '')}{tx.amount} $RWT
                   </td>
                   <td className="px-6 md:px-8 py-4 md:py-5">
                     <span className="text-green-500 text-[8px] md:text-[9px] font-black tracking-widest uppercase">

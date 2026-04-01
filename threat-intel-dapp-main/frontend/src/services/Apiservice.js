@@ -143,4 +143,58 @@ export const checkBackendHealth = async () => {
   }
 };
 
+/**
+ * Get pending and total rewards
+ */
+export const getRewards = async (wallet) => {
+  try {
+    const response = await api.get(`/rewards/${wallet}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching rewards:', error);
+    return { tokens: 0, pendingTokens: 0 };
+  }
+};
+
+/**
+ * Claim pending rewards
+ */
+export const claimRewardsAPI = async (wallet) => {
+  try {
+    const response = await api.post('/rewards/claim', { wallet });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Transfer tokens 
+ */
+export const transferTokensAPI = async (fromWallet, toWallet, amount) => {
+  try {
+    const response = await api.post('/rewards/transfer', {
+      fromWallet,
+      toWallet,
+      amount: Number(amount)
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
+ * Get user transaction ledger
+ */
+export const getTransactions = async (wallet) => {
+  try {
+    const response = await api.get(`/rewards/transactions/${wallet}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    return [];
+  }
+};
+
 export default api;
