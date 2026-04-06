@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 
 const reportRoutes = require("./routes/reportRoutes");
 const scanRoutes = require("./routes/scanRoutes");
+const rewardRoutes = require("./routes/rewardRoutes");
 
 const app = express();
 const server = http.createServer(app);
@@ -25,12 +26,17 @@ app.use('/api/scan', scanRoutes)
 
 // MongoDB connection
 mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/threat-intel", { family: 4 })
+  .then(() => console.log("MongoDB connected successfully to:", process.env.MONGO_URI ? "Atlas/Remote" : "Localhost"))
+  .catch((err) => {
+    console.error("MongoDB Connection Error:");
+    console.error("Make sure your MONGO_URI is set correctly in your .env or Render dashboard.");
+    console.error(err);
+  });
 
 // Routes
 app.use("/api/reports", reportRoutes);
+app.use("/api/rewards", rewardRoutes);
 
 const ChatMessage = require("./models/ChatMessage");
 
@@ -77,6 +83,7 @@ io.on("connection", async (socket) => {
 
 
 
-server.listen(process.env.PORT, () => {
-  console.log(`Server running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const Report = require("../models/Report");
 const User = require("../models/User");
+const Transaction = require("../models/Transaction");
 const { encrypt } = require("../services/encryption");
 
 const router = express.Router();
@@ -138,20 +139,32 @@ router.post("/:id/vote", async (req, res) => {
         if (!report.rewardsDistributed) {
           report.rewardsDistributed = true;
 
-          // Give submitter 50 tokens
+          // Give submitter 50 pending tokens
           await User.findOneAndUpdate(
             { wallet: { $regex: new RegExp(`^${report.wallet}$`, "i") } },
-            { $inc: { tokens: 50 }, $setOnInsert: { wallet: report.wallet } },
+            { $inc: { pendingTokens: 50 }, $setOnInsert: { wallet: report.wallet } },
             { upsert: true, new: true }
           );
+          await Transaction.create({
+            hash: "0x" + crypto.randomBytes(32).toString("hex"),
+            wallet: report.wallet,
+            type: "EARNED",
+            amount: 50
+          });
 
-          // Give each upvoter 5 tokens
+          // Give each upvoter 5 pending tokens
           for (const voterWallet of report.upvotes) {
             await User.findOneAndUpdate(
               { wallet: { $regex: new RegExp(`^${voterWallet}$`, "i") } },
-              { $inc: { tokens: 5 }, $setOnInsert: { wallet: voterWallet } },
+              { $inc: { pendingTokens: 5 }, $setOnInsert: { wallet: voterWallet } },
               { upsert: true, new: true }
             );
+            await Transaction.create({
+              hash: "0x" + crypto.randomBytes(32).toString("hex"),
+              wallet: voterWallet,
+              type: "EARNED",
+              amount: 5
+            });
           }
         }
       } else {

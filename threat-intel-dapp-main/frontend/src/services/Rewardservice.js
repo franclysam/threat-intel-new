@@ -1,47 +1,21 @@
-import { parseUnits, formatUnits } from 'ethers';
-import { initProvider, rewardTokenContract, signer, threatIntelContract } from '../utils/Web3';
+import { getRewards, claimRewardsAPI, transferTokensAPI, getTransactions } from './Apiservice';
+
 /**
- * Get token information
+ * Get token information (mocked)
  */
 export const getTokenInfo = async () => {
-  try {
-    if (signer && (await signer.getAddress()) === "0xDEV_USER_ANONYMOUS") {
-      return { name: "DevRewardToken", symbol: "RWT", decimals: 18 };
-    }
-    if (!rewardTokenContract) await initProvider();
-
-    const [name, symbol, decimals] = await Promise.all([
-      rewardTokenContract.name(),
-      rewardTokenContract.symbol(),
-      rewardTokenContract.decimals()
-    ]);
-
-    return {
-      name,
-      symbol,
-      decimals: Number(decimals)
-    };
-  } catch (error) {
-    console.error('Error getting token info:', error);
-    throw error;
-  }
+  return { name: "SentinelToken", symbol: "RWT", decimals: 18 };
 };
 
 /**
  * Transfer tokens to another address
  */
-export const transferTokens = async (toAddress, amount) => {
+export const transferTokens = async (fromAddress, toAddress, amount) => {
   try {
-    if (!rewardTokenContract) await initProvider();
-
-    const amountWei = parseUnits(amount.toString(), 18);
-    const tx = await rewardTokenContract.transfer(toAddress, amountWei);
-    const receipt = await tx.wait();
-
+    const data = await transferTokensAPI(fromAddress, toAddress, amount);
     return {
       success: true,
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber
+      txHash: data.transactionHash
     };
   } catch (error) {
     console.error('Error transferring tokens:', error);
@@ -50,40 +24,18 @@ export const transferTokens = async (toAddress, amount) => {
 };
 
 export const getRewardTokenAddress = async () => {
-  try {
-    if (!threatIntelContract) {
-      // Simple heuristic for dev bypass
-      return "0xDEV_TOKEN_ADDRESS";
-    }
-    // if (!threatIntelContract) await initProvider(); // Only if we want real one
-
-    if (typeof rewardTokenContract.claimRewards !== 'function') {
-      throw new Error('Claim rewards is not supported by the deployed RewardToken contract');
-    }
-  } catch (error) {
-    console.error('Error getting reward token address:', error);
-    throw error;
-  }
+  return "0xMOCK_TOKEN_ADDRESS_FOR_SIMULATION";
 };
 
 /**
- * Claim rewards (if applicable in your contract)
+ * Claim rewards
  */
-export const claimRewards = async () => {
+export const claimRewards = async (wallet) => {
   try {
-    if (!rewardTokenContract) await initProvider();
-
-    if (typeof rewardTokenContract.claimRewards !== 'function') {
-      throw new Error('Claim rewards is not supported by the deployed RewardToken contract');
-    }
-
-    const tx = await rewardTokenContract.claimRewards();
-    const receipt = await tx.wait();
-
+    const data = await claimRewardsAPI(wallet);
     return {
       success: true,
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber
+      txHash: data.transactionHash
     };
   } catch (error) {
     console.error('Error claiming rewards:', error);
@@ -96,15 +48,8 @@ export const claimRewards = async () => {
  */
 export const getPendingRewards = async (address) => {
   try {
-    if (address === "0xDEV_USER_ANONYMOUS") return "25.50";
-    if (!rewardTokenContract) await initProvider();
-
-    if (typeof rewardTokenContract.pendingRewards !== 'function') {
-      return '0';
-    }
-
-    const rewards = await rewardTokenContract.pendingRewards(address);
-    return formatUnits(rewards, 18);
+    const rewards = await getRewards(address);
+    return String(rewards.pendingTokens || 0);
   } catch (error) {
     console.error('Error getting pending rewards:', error);
     return '0';
@@ -112,30 +57,23 @@ export const getPendingRewards = async (address) => {
 };
 
 /**
- * Listen for Transfer events
+ * Get transaction history from mock ledger
  */
-export const onTransfer = (callback) => {
-  if (!rewardTokenContract) {
-    console.error('Contract not initialized');
-    return;
+export const getUserTransactions = async (address) => {
+  try {
+    return await getTransactions(address);
+  } catch (err) {
+    console.error('Error getting transactions', err);
+    return [];
   }
-
-  rewardTokenContract.on('Transfer', (from, to, value, event) => {
-    callback({
-      from,
-      to,
-      value: formatUnits(value, 18),
-      transactionHash: event.log.transactionHash,
-      blockNumber: event.log.blockNumber
-    });
-  });
 };
 
 /**
- * Remove event listeners
+ * Empty functions since there's no smart contract events anymore
  */
+export const onTransfer = (callback) => {
+  // Empty mock
+};
 export const removeAllListeners = () => {
-  if (rewardTokenContract) {
-    rewardTokenContract.removeAllListeners();
-  }
+  // Empty mock
 };

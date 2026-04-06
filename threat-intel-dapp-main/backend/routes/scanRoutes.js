@@ -233,48 +233,88 @@ router.post("/link", express.json(), async (req, res) => {
             allThreats.add("Explicit Dummy/Test Malicious Link String");
         }
 
-        // --- 2. DEEP CONTENT INSPECTION via HTTP GET ---
+        // --- 2. VIRUSTOTAL API INTEGRATION ---
+        let vtStats = null;
+        let vtSuccess = false;
+
+        const vtApiKey = process.env.VIRUSTOTAL_API_KEY;
+        if (vtApiKey) {
+            try {
+                const vtId = Buffer.from(targetUrl).toString('base64url');
+                const vtResponse = await axios.get(`https://www.virustotal.com/api/v3/urls/${vtId}`, {
+                    headers: {
+                        'x-apikey': vtApiKey
+                    },
+                    timeout: 8000
+                });
+                
+                vtStats = vtResponse.data?.data?.attributes?.last_analysis_stats;
+                if (vtStats) {
+                    vtSuccess = true;
+                    if (vtStats.malicious > 0) {
+                        maxRiskScore = 100;
+                        allThreats.add(`VirusTotal detected malicious signals (${vtStats.malicious} vendors)`);
+                        overallDetails = "Critical threats confirmed by industry threat intelligence (VirusTotal).";
+                    } else if (vtStats.suspicious > 0) {
+                        maxRiskScore += (vtStats.suspicious * 15);
+                        allThreats.add(`VirusTotal flags as suspicious (${vtStats.suspicious} vendors)`);
+                    } else if (vtStats.harmless > 0 && maxRiskScore < 40) {
+                        overallDetails = `URL marked as harmless by ${vtStats.harmless} security vendors.`;
+                        // Slight score reduction if verified clean
+                        maxRiskScore = Math.max(0, maxRiskScore - 10);
+                    }
+                }
+            } catch (vtErr) {
+                 console.log("VirusTotal Scan skipped or failed:", vtErr.response ? vtErr.response.status : vtErr.message);
+            }
+        }
+
+        // --- 3. DEEP CONTENT INSPECTION via HTTP GET (FALLBACK) ---
         let fetchSuccessful = false;
-        try {
-            const response = await axios.get(targetUrl, { 
-                timeout: 5000,
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AI_DIAGNOSTIC_UPLINK/1.0' },
-                maxRedirects: 3 
-            });
+        if (!vtSuccess || (vtStats && vtStats.malicious === 0)) {
+            try {
+                const response = await axios.get(targetUrl, { 
+                    timeout: 5000,
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AI_DIAGNOSTIC_UPLINK/1.0' },
+                    maxRedirects: 3 
+                });
 
-            fetchSuccessful = true;
-            const content = (typeof response.data === 'string' ? response.data : JSON.stringify(response.data)).toLowerCase();
-            const headersStr = JSON.stringify(response.headers).toLowerCase();
+                fetchSuccessful = true;
+                const content = (typeof response.data === 'string' ? response.data : JSON.stringify(response.data)).toLowerCase();
+                const headersStr = JSON.stringify(response.headers).toLowerCase();
 
-            // Test for EICAR / Dummy payloads explicitly inside the destination server source
-            const eicarString = "x5o!p%@ap[4\\pzx54(p^)7cc)7}$eicar-standard-antivirus-test-file!$h+h*";
-            if (content.includes("dummy virus") || content.includes("test virus") || content.includes("malicious virus dummy") || content.includes(eicarString)) {
-                maxRiskScore = 100;
-                allThreats.add("Remote host served malicious testing payloads (EICAR / Dummy Virus)");
-                overallDetails = "Critical threats detected directly in the server's response body.";
-            }
+                // Test for EICAR / Dummy payloads explicitly inside the destination server source
+                const eicarString = "x5o!p%@ap[4\\pzx54(p^)7cc)7}$eicar-standard-antivirus-test-file!$h+h*";
+                if (content.includes("dummy virus") || content.includes("test virus") || content.includes("malicious virus dummy") || content.includes(eicarString)) {
+                    maxRiskScore = 100;
+                    allThreats.add("Remote host served malicious testing payloads (EICAR / Dummy Virus)");
+                    overallDetails = "Critical threats detected directly in the server's response body.";
+                }
 
-            // Test for generic phishing or stealth patterns inside the HTML script/frames
-            if (content.includes("<iframe") && content.includes("opacity: 0") || content.includes("visibility: hidden")) {
-                maxRiskScore += 25;
-                allThreats.add("Hidden HTML iframes (Potential Clickjacking)");
-            }
-            if (content.includes("document.write(unescape(") || content.includes("eval(atob(")) {
-                maxRiskScore += 35;
-                allThreats.add("Obfuscated Javascript Payloads detected in source");
-            }
-            if ((content.match(/<input type="password"/g) || []).length > 0 && !targetUrl.startsWith("https://")) {
-                maxRiskScore += 50;
-                allThreats.add("Password collection on unencrypted (HTTP) connection");
-            }
+                // Test for generic phishing or stealth patterns inside the HTML script/frames
+                if (content.includes("<iframe") && content.includes("opacity: 0") || content.includes("visibility: hidden")) {
+                    maxRiskScore += 25;
+                    allThreats.add("Hidden HTML iframes (Potential Clickjacking)");
+                }
+                if (content.includes("document.write(unescape(") || content.includes("eval(atob(")) {
+                    maxRiskScore += 35;
+                    allThreats.add("Obfuscated Javascript Payloads detected in source");
+                }
+                if ((content.match(/<input type="password"/g) || []).length > 0 && !targetUrl.startsWith("https://")) {
+                    maxRiskScore += 50;
+                    allThreats.add("Password collection on unencrypted (HTTP) connection");
+                }
 
-        } catch (err) {
-            // If the endpoint fails to fetch, it's either dead, blocking us, or refusing connections.
-            maxRiskScore += 15;
-            allThreats.add("Remote host refused connection or timed out (Unstable Server)");
-            if (err.response && err.response.status) {
-                allThreats.add(`HTTP Response Error: ${err.response.status}`);
+            } catch (err) {
+                // If the endpoint fails to fetch, it's either dead, blocking us, or refusing connections.
+                maxRiskScore += 15;
+                allThreats.add("Remote host refused connection or timed out (Unstable Server)");
+                if (err.response && err.response.status) {
+                    allThreats.add(`HTTP Response Error: ${err.response.status}`);
+                }
             }
+        } else {
+             fetchSuccessful = true; // Pretend fetch was successful to ensure normal text outputs down below
         }
 
         // --- FINALIZE RISK SCORES ---
@@ -286,19 +326,20 @@ router.post("/link", express.json(), async (req, res) => {
         if (maxRiskScore >= 80) {
             threatLevel = "High";
             malwareDetected = true;
-            if (!overallDetails) overallDetails = fetchSuccessful 
-                ? "Neural scan completed. Critical threats identified in both URI heuristics and site payload architecture."
+            if (!overallDetails) overallDetails = vtSuccess 
+                ? "VirusTotal Neural scan completed. Critical threats identified."
                 : "Critical threats detected in URL heuristic scan. Target host unreachable.";
         } else if (maxRiskScore >= 40) {
             threatLevel = "Moderate";
-            if (!overallDetails) overallDetails = fetchSuccessful
-                ? "Target resolved successfully, but suspicious patterns were identified in the host architecture."
+            if (!overallDetails) overallDetails = vtSuccess
+                ? "VirusTotal identified suspicious patterns in the host architecture."
                 : "Suspicious heuristics found in URL parameters. Handled with caution.";
         } else {
-            if (!overallDetails) overallDetails = fetchSuccessful
-                ? "Target host successfully negotiated. The remote payload and URI patterns appear clinically safe."
-                : "The provided URL target target seems structurally sound, though connection timed out.";
-            if (maxRiskScore === 0) maxRiskScore = Math.floor(Math.random() * 5); // 0-4 base noise
+            if (!overallDetails) overallDetails = vtSuccess
+                ? "URL verified clean by VirusTotal. The remote payload and URI patterns appear clinically safe."
+                : "The provided URL target seems structurally sound.";
+            // Removed the Math.random() noise logic so it stays consistently 0 for clean links.
+            if (maxRiskScore < 0) maxRiskScore = 0; 
         }
 
         if (allThreats.size === 0) allThreats.add("None");
