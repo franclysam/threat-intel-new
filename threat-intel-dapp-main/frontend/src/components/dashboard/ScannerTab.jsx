@@ -9,7 +9,7 @@ const ScannerTab = () => {
   const fileInputRef = useRef(null);
 
   const handleScan = async () => {
-    if (scanType === 'file' && !file) return;
+    if (scanType === 'file' && !file && !input.trim()) return;
     if (scanType === 'link' && !input.trim()) return;
 
     setIsScanning(true);
@@ -18,9 +18,14 @@ const ScannerTab = () => {
     try {
       if (scanType === 'file') {
         const formData = new FormData();
-        // Create a blob from the current input content (which might be edited)
-        const blob = new Blob([input], { type: 'text/plain' });
-        formData.append('file', blob, file?.name || 'manual_stream.txt');
+        // Prefer the actual file object if available to prevent corrupted binary encoding and inflation.
+        // Fallback to text blob if there is manual text input.
+        if (file) {
+          formData.append('file', file);
+        } else {
+          const blob = new Blob([input], { type: 'text/plain' });
+          formData.append('file', blob, 'manual_stream.txt');
+        }
 
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
         const response = await fetch(`${API_URL}/scan`, {
@@ -144,7 +149,7 @@ const ScannerTab = () => {
 
           <button
             onClick={handleScan}
-            disabled={isScanning || (scanType === 'file' ? !file : !input.trim())}
+            disabled={isScanning || (scanType === 'file' ? (!file && !input.trim()) : !input.trim())}
             className="w-full bg-neon text-black font-black py-6 md:py-8 tracking-[0.3em] md:tracking-[0.5em] text-xs md:text-sm disabled:brightness-50 flex items-center justify-center gap-4 transition-all active:scale-95"
           >
             {isScanning ? (
