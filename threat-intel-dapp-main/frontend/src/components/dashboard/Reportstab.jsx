@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { getReports, submitReport, voteOnReport } from "../../services/Apiservice";
+import React, { useState, useEffect, useRef } from 'react';
+import io from 'socket.io-client';
+import { getReports, submitReport, voteOnReport, withdrawReportRewards } from "../../services/Apiservice";
 import { uploadToIPFS } from "../../services/Ipfsservice";
 
 const Reportstab = ({ userAddress }) => {
   const [reports, setReports] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const socketRef = useRef(null);
 
   // Form State
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('MALWARE');
   const [severity, setSeverity] = useState('MEDIUM');
   const [description, setDescription] = useState('');
+  const [expiryDays, setExpiryDays] = useState('30');
   const [submitting, setSubmitting] = useState(false);
 
   const loadReports = async () => {
@@ -28,6 +31,26 @@ const Reportstab = ({ userAddress }) => {
 
   useEffect(() => {
     loadReports();
+
+    // Socket.io for real-time vote & report updates
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    socketRef.current = io(SOCKET_URL);
+
+    socketRef.current.on('voteUpdate', (data) => {
+      setReports(prev => prev.map(r =>
+        r._id === data.reportId
+          ? { ...r, upvotes: data.upvotes, downvotes: data.downvotes }
+          : r
+      ));
+    });
+
+    socketRef.current.on('newReport', (newReport) => {
+      setReports(prev => [newReport, ...prev]);
+    });
+
+    return () => {
+      if (socketRef.current) socketRef.current.disconnect();
+    };
   }, []);
 
   const handleVote = async (reportId, action) => {
@@ -38,6 +61,17 @@ const Reportstab = ({ userAddress }) => {
       await loadReports();
     } catch (error) {
       alert(error?.message || `Failed to ${action}.`);
+    }
+  };
+
+  const handleWithdraw = async (reportId) => {
+    try {
+      const authWallet = userAddress || "0xDEV_USER_ANONYMOUS";
+      const result = await withdrawReportRewards(reportId, authWallet);
+      alert(`Withdrew ${result.amount} tokens to your vault!`);
+      await loadReports();
+    } catch (error) {
+      alert(error?.message || "Failed to withdraw rewards.");
     }
   };
 
@@ -59,6 +93,7 @@ const Reportstab = ({ userAddress }) => {
         category: category,
         data: `TITLE: ${title}\nSEVERITY: ${severity}\nDESCRIPTION: ${description}`,
         hash: ipfsHash,
+        expiryDays: expiryDays,
       });
 
       setIsFormOpen(false);
@@ -167,38 +202,78 @@ const Reportstab = ({ userAddress }) => {
                   </div>
 
                   <div className="pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-t border-gray-900/50 gap-4">
-                    <div className="flex items-center gap-4 bg-black border border-gray-900 px-3 py-1 rounded-sm">
-                      <button 
-                        onClick={() => handleVote(report._id, 'upvote')}
-                        className={`p-1 hover:text-neon transition-colors ${report.upvotes?.includes(userAddress || "0xDEV_USER_ANONYMOUS") ? 'text-neon' : 'text-gray-500'}`}
-                        title="Upvote (Validate)"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
-                      </button>
-                      
-                      <span className="text-[10px] md:text-xs font-black text-white w-6 text-center">
-                        {(report.upvotes?.length || 0) - (report.downvotes?.length || 0)}
-                      </span>
-                      
-                      <button 
-                        onClick={() => handleVote(report._id, 'downvote')}
-                        className={`p-1 hover:text-red-500 transition-colors ${report.downvotes?.includes(userAddress || "0xDEV_USER_ANONYMOUS") ? 'text-red-500' : 'text-gray-500'}`}
-                        title="Downvote (Flag)"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-                    </div>
+                    {(!report.expiryDate || new Date() <= new Date(report.expiryDate)) ? (
+                      <div className="flex items-center gap-4 bg-black border border-gray-900 px-3 py-1 rounded-sm">
+                        <button 
+                          onClick={() => handleVote(report._id, 'upvote')}
+                          className={`p-1 hover:text-neon transition-colors ${report.upvotes?.includes(userAddress || "0xDEV_USER_ANONYMOUS") ? 'text-neon' : 'text-gray-500'}`}
+                          title="Upvote (Validate)"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
+                        </button>
+                        
+                        <span className="text-[10px] md:text-xs font-black text-white w-6 text-center">
+                          {(report.upvotes?.length || 0) - (report.downvotes?.length || 0)}
+                        </span>
+                        
+                        <button 
+                          onClick={() => handleVote(report._id, 'downvote')}
+                          className={`p-1 hover:text-red-500 transition-colors ${report.downvotes?.includes(userAddress || "0xDEV_USER_ANONYMOUS") ? 'text-red-500' : 'text-gray-500'}`}
+                          title="Downvote (Flag)"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-4 bg-black border border-gray-900 px-3 py-1 rounded-sm">
+                        <span className="text-[9px] md:text-[10px] text-gray-500 font-bold tracking-widest uppercase">
+                          EXPIRED ({new Date(report.expiryDate).toLocaleDateString()})
+                        </span>
+                      </div>
+                    )}
                     
                     <div className="flex gap-4 items-center">
                       <div className="text-[8px] md:text-[9px] font-bold text-gray-500 tracking-widest uppercase">
                         {(report.upvotes?.length || 0) + (report.downvotes?.length || 0)} Votes
                       </div>
-                      <div className="flex items-center gap-3">
-                        <svg className="w-4 h-4 text-neon" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        <span className="text-neon text-[9px] md:text-[10px] font-black tracking-widest">+25.00_RWT</span>
-                      </div>
+                      
+                      {(report.expiryDate && new Date() > new Date(report.expiryDate)) && (userAddress || "0xDEV_USER_ANONYMOUS").toLowerCase() === report.wallet.toLowerCase() ? (
+                        !report.rewardsDistributed ? (
+                          <button 
+                            onClick={() => handleWithdraw(report._id)}
+                            className="bg-neon text-black px-4 py-1.5 text-[8px] md:text-[9px] font-black tracking-widest uppercase hover:brightness-110 active:scale-95"
+                          >
+                            WITHDRAW_REWARDS
+                          </button>
+                        ) : (
+                          <span className="text-gray-500 text-[8px] md:text-[9px] font-black tracking-widest uppercase border border-gray-800 px-4 py-1.5">
+                            REWARDS_CLAIMED
+                          </span>
+                        )
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <svg className="w-4 h-4 text-neon" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          <span className="text-neon text-[9px] md:text-[10px] font-black tracking-widest">
+                            +{(() => {
+                              const upvotes = report.upvotes?.length || 0;
+                              const downvotes = report.downvotes?.length || 0;
+                              const totalVotes = upvotes + downvotes;
+                              let multiplier = 1.0;
+                              if (totalVotes > 0) {
+                                const ratio = (upvotes / totalVotes) * 100;
+                                if (ratio < 70) multiplier = 0.25;
+                                else if (ratio < 80) multiplier = 0.50;
+                                else if (ratio < 90) multiplier = 0.75;
+                              }
+                              return (Math.max(0, upvotes - downvotes) * 10 * multiplier).toFixed(2);
+                            })()}_RWT
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+
                 </div>
               </div>
             </div>
@@ -231,7 +306,7 @@ const Reportstab = ({ userAddress }) => {
                   placeholder="Summarize threat..."
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8">
                 <div>
                   <label className="block text-[8px] md:text-[9px] font-black text-gray-600 tracking-widest uppercase mb-3">Vector_Category</label>
                   <select
@@ -257,6 +332,17 @@ const Reportstab = ({ userAddress }) => {
                     <option value="HIGH">HIGH</option>
                     <option value="CRITICAL">CRITICAL</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[8px] md:text-[9px] font-black text-gray-600 tracking-widest uppercase mb-3">Expiry (Days)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={expiryDays}
+                    onChange={(e) => setExpiryDays(e.target.value)}
+                    className="w-full bg-black border border-gray-800 p-4 text-[10px] md:text-xs font-bold text-white outline-none focus:border-neon transition-all"
+                  />
                 </div>
               </div>
               <div>

@@ -8,7 +8,7 @@ const CommunityTab = ({ userAddress }) => {
     const scrollRef = useRef();
 
     useEffect(() => {
-        const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
+        const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
         socketRef.current = io(SOCKET_URL);
 
         socketRef.current.on('history', (history) => {

@@ -67,6 +67,14 @@ const ScannerTab = () => {
       }
     } catch (e) {
       console.error(e);
+      // Modern browsers block requests from public HTTPS domains to HTTP localhost due to Mixed Content & PNA policies.
+      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const isLocalApi = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.includes('localhost') : true;
+        if (isLocalApi) {
+          alert('DEPLOYMENT CONFIG ERROR:\nYour Vercel app is trying to connect to a Localhost API, which is blocked by the browser.\n\nPlease go to your Vercel Project Settings -> Environment Variables, and add "VITE_API_URL" pointing to your live Render backend URL.');
+          return;
+        }
+      }
       alert('Scanning failed. Connectivity issues with neural mesh.');
     } finally {
       setIsScanning(false);

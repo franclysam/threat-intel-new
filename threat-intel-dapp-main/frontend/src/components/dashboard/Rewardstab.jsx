@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { transferTokens, claimRewards, getPendingRewards, getUserTransactions } from '../../services/Rewardservice';
 import { getBalance, getAddress } from '../../utils/Web3';
+import io from 'socket.io-client';
 
 const DATA = [
   { name: 'MON', rewards: 20 },
@@ -22,6 +23,19 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
   const [transactions, setTransactions] = useState([]);
   const [nativeBalance, setNativeBalance] = useState('0');
   const [isWalletSynced, setIsWalletSynced] = useState(true);
+  const socketRef = useRef(null);
+
+  const refreshVaultData = async () => {
+    if (!userAddress) return;
+    try {
+      const pending = await getPendingRewards(userAddress);
+      const txs = await getUserTransactions(userAddress);
+      setPendingRewards(parseFloat(pending || '0').toFixed(2));
+      setTransactions(txs || []);
+    } catch (e) {
+      console.error("Failed to refresh vault data:", e);
+    }
+  };
 
   useEffect(() => {
     if (!userAddress) return;
@@ -29,8 +43,6 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
     let active = true;
     const verifyWalletAndLoadData = async () => {
       try {
-        // CROSSCHECK: Ensure active wallet matches the passed userAddress prop
-        // We use try-catch inside in case getAddress throws if Web3 isn't cleanly initialized
         let currentActiveAddress = userAddress;
         try {
           currentActiveAddress = await getAddress();
@@ -43,10 +55,7 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
           return;
         }
 
-        // Fetch Native Metamask Balance
         const nativeBal = await getBalance(userAddress);
-
-        // Fetch Mock DB Rewards
         const pending = await getPendingRewards(userAddress);
         const txs = await getUserTransactions(userAddress);
 
@@ -66,10 +75,26 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
     };
 
     verifyWalletAndLoadData();
-    const interval = setInterval(verifyWalletAndLoadData, 10000); // UI poll
+    const interval = setInterval(verifyWalletAndLoadData, 10000);
     return () => {
       active = false;
       clearInterval(interval);
+    };
+  }, [userAddress]);
+
+  // Socket.io: real-time vault updates when rewards are withdrawn
+  useEffect(() => {
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    socketRef.current = io(SOCKET_URL);
+
+    socketRef.current.on('vaultUpdate', (data) => {
+      if (userAddress && data.wallet.toLowerCase() === userAddress.toLowerCase()) {
+        refreshVaultData();
+      }
+    });
+
+    return () => {
+      if (socketRef.current) socketRef.current.disconnect();
     };
   }, [userAddress]);
 
@@ -105,6 +130,28 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
       setTransactions(txs || []);
     } catch (error) {
       alert('Transfer failed: ' + (error?.message || error?.error || 'Transaction rejected'));
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const handleWithdrawToMetaMask = async () => {
+    if (!transferAmount) {
+      alert('Please enter an amount to withdraw to MetaMask');
+      return;
+    }
+
+    setTransferring(true);
+    try {
+      // Mocking transfer to external address by doing an internal transfer to a "burned/withdrawn" address
+      // or just using the existing transfer logic to the user's own address as a simulation
+      await transferTokens(userAddress, '0x000000000000000000000000000000000000dEaD', transferAmount);
+      alert(`Successfully withdrew ${transferAmount} $RWT to MetaMask! (Simulated)`);
+      setTransferAmount('');
+      const txs = await getUserTransactions(userAddress);
+      setTransactions(txs || []);
+    } catch (error) {
+      alert('Withdrawal failed: ' + (error?.message || error?.error || 'Transaction rejected'));
     } finally {
       setTransferring(false);
     }
@@ -151,7 +198,7 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
           { label: 'Native_Balance', value: nativeBalance, unit: 'ETH/POL', footer: 'ON-CHAIN LIQUIDITY', footerColor: 'text-purple-500' },
           { label: 'Mock_Liquidity', value: tokenBalance, unit: '$RWT', footer: '+12%_DELTA_7D', footerColor: 'text-neon' },
           { label: 'Pending_Settlement', value: pendingRewards, unit: '$RWT', footer: 'ACCUMULATING...', footerColor: 'text-yellow-500' },
-          { label: 'Total_Earned', value: (parseFloat(tokenBalance) + parseFloat(pendingRewards)).toFixed(2), unit: '$RWT', footer: 'YIELD_8.5%_APY', footerColor: 'text-neon' },
+          { label: 'Total_Earned', value: (parseFloat(tokenBalance || 0) + parseFloat(pendingRewards || 0)).toFixed(2), unit: '$RWT', footer: 'YIELD_8.5%_APY', footerColor: 'text-neon' },
         ].map((card, i) => (
           <div key={i} className="bg-[#080808] border border-gray-900 p-6 md:p-8 group hover:border-neon transition-colors">
             <div className="text-gray-600 text-[7px] md:text-[8px] font-black uppercase tracking-[0.3em] mb-4 group-hover:text-neon">{card.label}</div>
@@ -193,16 +240,6 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
           <h3 className="text-[12px] md:text-sm font-black text-white tracking-[0.3em] uppercase mb-8 border-l border-neon/50 pl-4">TRANSFER_ASSETS</h3>
           <div className="space-y-6">
             <div>
-              <label className="block text-[7px] md:text-[8px] font-black text-gray-600 tracking-widest uppercase mb-3">Target_Descriptor</label>
-              <input
-                type="text"
-                value={transferAddress}
-                onChange={(e) => setTransferAddress(e.target.value)}
-                placeholder="0X..."
-                className="w-full bg-black border border-gray-800 p-4 text-[10px] md:text-xs font-bold text-white outline-none focus:border-neon transition-all"
-              />
-            </div>
-            <div>
               <label className="block text-[7px] md:text-[8px] font-black text-gray-600 tracking-widest uppercase mb-3">Asset_Quantity</label>
               <input
                 type="number"
@@ -212,13 +249,32 @@ const Rewardstab = ({ userAddress, tokenBalance }) => {
                 className="w-full bg-black border border-gray-800 p-4 text-[10px] md:text-xs font-bold text-white outline-none focus:border-neon transition-all"
               />
             </div>
-            <button
-              onClick={handleTransfer}
-              disabled={transferring}
-              className="w-full bg-black border border-neon text-neon font-black py-5 text-[9px] md:text-[10px] tracking-[0.3em] uppercase hover:bg-neon hover:text-black transition-all disabled:opacity-50 active:scale-95"
-            >
-              {transferring ? 'INITIATING...' : 'EXECUTE_TRANSFER'}
-            </button>
+            <div>
+              <label className="block text-[7px] md:text-[8px] font-black text-gray-600 tracking-widest uppercase mb-3">Target_Descriptor (For Internal Transfer)</label>
+              <input
+                type="text"
+                value={transferAddress}
+                onChange={(e) => setTransferAddress(e.target.value)}
+                placeholder="Leave blank for MetaMask withdrawal"
+                className="w-full bg-black border border-gray-800 p-4 text-[10px] md:text-xs font-bold text-white outline-none focus:border-neon transition-all"
+              />
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={handleTransfer}
+                disabled={transferring || !transferAddress}
+                className="flex-1 bg-black border border-neon text-neon font-black py-4 text-[8px] md:text-[9px] tracking-[0.2em] uppercase hover:bg-neon hover:text-black transition-all disabled:opacity-50 active:scale-95"
+              >
+                {transferring ? 'INITIATING...' : 'INTERNAL_TRANSFER'}
+              </button>
+              <button
+                onClick={handleWithdrawToMetaMask}
+                disabled={transferring}
+                className="flex-1 bg-neon text-black font-black py-4 text-[8px] md:text-[9px] tracking-[0.2em] uppercase hover:brightness-110 transition-all disabled:opacity-50 active:scale-95"
+              >
+                {transferring ? 'PROCESSING...' : 'WITHDRAW_METAMASK'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

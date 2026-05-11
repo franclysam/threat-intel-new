@@ -117,6 +117,22 @@ export const voteOnReport = async (reportId, wallet, action) => {
 };
 
 /**
+ * Withdraw rewards for an expired report
+ * @param {string} reportId 
+ * @param {string} wallet 
+ */
+export const withdrawReportRewards = async (reportId, wallet) => {
+  try {
+    const response = await api.post(`/reports/${reportId}/withdraw`, {
+      wallet
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
+
+/**
  * Get user-specific statistics
  * @param {string} wallet 
  */

@@ -14,6 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
 });
+app.set("io", io);
 
 app.use(cors());
 app.use(express.json());
@@ -26,7 +27,7 @@ app.use('/api/scan', scanRoutes)
 
 // MongoDB connection
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/threat-intel", { family: 4 })
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/threat-intel")
   .then(() => console.log("MongoDB connected successfully to:", process.env.MONGO_URI ? "Atlas/Remote" : "Localhost"))
   .catch((err) => {
     console.error("MongoDB Connection Error:");
@@ -50,7 +51,13 @@ io.on("connection", async (socket) => {
   try {
     const history = await ChatMessage.find().sort({ timestamp: -1 }).limit(50);
     // History is in reverse chronological order, reverse it for the client
-    socket.emit("history", history.reverse());
+    const formattedHistory = history.reverse().map(msg => ({
+      user: msg.sender,
+      text: msg.text,
+      time: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isOfficial: msg.isOfficial,
+    }));
+    socket.emit("history", formattedHistory);
   } catch (err) {
     console.error("Error fetching chat history:", err);
   }
@@ -59,17 +66,18 @@ io.on("connection", async (socket) => {
     try {
       // Save to Database
       const chatMsg = new ChatMessage({
-        sender: msg.sender,
+        sender: msg.user,
         text: msg.text,
+        isOfficial: msg.isOfficial || false,
       });
       await chatMsg.save();
 
       // Broadcast message with generated data
       io.emit("message", {
-        id: chatMsg._id,
-        sender: chatMsg.sender,
+        user: chatMsg.sender,
         text: chatMsg.text,
-        timestamp: chatMsg.timestamp,
+        time: new Date(chatMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isOfficial: chatMsg.isOfficial,
       });
     } catch (err) {
       console.error("Error saving chat message:", err);
