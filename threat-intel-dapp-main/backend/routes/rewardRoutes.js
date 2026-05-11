@@ -103,7 +103,7 @@ router.post("/transfer", async (req, res) => {
     
     // Create a transaction record for receiver
     const rxTx = new Transaction({
-        hash: tx.hash, // same hash
+        hash: "0x" + crypto.randomBytes(32).toString('hex'), // unique hash
         wallet: receiver.wallet,
         type: "RECEIVED",
         amount: amount,

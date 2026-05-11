@@ -26,6 +26,10 @@ const reportSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  expiryDate: {
+    type: Date,
+    default: () => new Date(+new Date() + 30*24*60*60*1000), // Default 30 days
+  },
 });
 
 module.exports = mongoose.model("Report", reportSchema);

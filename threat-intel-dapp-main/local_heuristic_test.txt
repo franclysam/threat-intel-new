@@ -1,0 +1,2 @@
+This is a harmless text file but it contains the keywords: dummy virus
+Our local heuristic scanner will flag this.
